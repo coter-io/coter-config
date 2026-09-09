@@ -99,12 +99,14 @@
     }
   },
 
-  "mcpServers": {
-    "composio": {
-      "transport": "http",
-      "url": "${COMPOSIO_MCP_URL}",
-      "headers": {
-        "x-consumer-api-key": "${COMPOSIO_API_KEY}"
+  "mcp": {
+    "servers": {
+      "composio": {
+        "transport": "streamable-http",
+        "url": "${COMPOSIO_MCP_URL}",
+        "headers": {
+          "x-consumer-api-key": "${COMPOSIO_API_KEY}"
+        }
       }
     }
   },
