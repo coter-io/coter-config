@@ -19,6 +19,6 @@
 
 ## 4. Rollout and end-to-end verification
 
-- [ ] 4.1 After merging to `develop` and `main`, run `Create tag` to cut a new tag, then dispatch the workflow on it with `latest` off; verify both images appear in GHCR tagged `<git tag>` and `<short sha>` and that `latest` was not moved
-- [ ] 4.2 Dispatch from a branch and verify the run fails before any build; re-run on the tag with `latest` on and verify `latest` now exists on both images
-- [ ] 4.3 Check GHCR package visibility/repo linkage and VPS pull access under `coter-io`; verify `docker pull` of the published image succeeds from the target environment
+- [x] 4.1 After merging to `develop` and `main`, run `Create tag` to cut a new tag, then dispatch the workflow on it with `latest` off; verify both images appear in GHCR tagged `<git tag>` and `<short sha>` and that `latest` was not moved
+- [x] 4.2 Dispatch from a branch and verify the run fails before any build; re-run on the tag with `latest` on and verify `latest` now exists on both images
+- [x] 4.3 Check GHCR package visibility/repo linkage and VPS pull access under `coter-io`; verify `docker pull` of the published image succeeds from the target environment
