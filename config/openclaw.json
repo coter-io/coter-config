@@ -11,8 +11,9 @@
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "dmPolicy": "pairing",
-      "groupPolicy": "allowlist",
+      "dmPolicy": "allowlist",
+      "allowFrom": ["tg:${TELEGRAM_USER_ID}"],
+      "groupPolicy": "disabled",
       "streaming": "partial"
     }
   },
@@ -28,7 +29,33 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "anthropic/claude-opus-4-6"
+        "primary": "openai/gpt-5.2",
+        "fallbacks": ["openai/gpt-5.4-mini"]
+      },
+      "imageGenerationModel": {
+        "primary": "openai/gpt-image-2",
+        "fallbacks": ["openrouter/openrouter/auto"]
+      },
+      "pdfModel": {
+        "primary": "openai/gpt-5.4-mini",
+        "fallbacks": ["openrouter/openrouter/auto"]
+      },
+      "models": {
+        "openai/gpt-5.3-chat": {
+          "params": {
+            "transport": "auto"
+          }
+        },
+        "openai/gpt-5.2": {
+          "params": {
+            "transport": "auto"
+          }
+        },
+        "openai/gpt-5.4-mini": {
+          "params": {
+            "transport": "auto"
+          }
+        }
       },
       "compaction": {
         "mode": "safeguard"
@@ -37,27 +64,50 @@
       "subagents": {
         "maxConcurrent": 4
       }
-    }
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "identity": {
+          "name": "Coter",
+          "emoji": "🔘"
+        }
+      }
+    ]
   },
 
   "commands": {
-    "native": "auto",
-    "nativeSkills": "auto"
+    "native": false,
+    "nativeSkills": "auto",
+    "allowFrom": {
+      "telegram": ["tg:${TELEGRAM_USER_ID}"]
+    }
   },
 
-  "messages": {
-    "ackReactionScope": "group-mentions"
-  },
-
-  "auth": {
-    "profiles": {
-      "anthropic:manual": {
-        "provider": "anthropic",
-        "mode": "token"
+  "tools": {
+    "media": {
+      "audio": {
+        "models": [
+          {
+            "type": "provider",
+            "provider": "openai",
+            "model": "gpt-4o-transcribe-mini"
+          }
+        ]
       }
-    },
-    "order": {
-      "anthropic": ["anthropic:manual"]
+    }
+  },
+
+  "mcp": {
+    "servers": {
+      "composio": {
+        "transport": "streamable-http",
+        "url": "${COMPOSIO_MCP_URL}",
+        "headers": {
+          "x-api-key": "${COMPOSIO_API_KEY}"
+        }
+      }
     }
   },
 
