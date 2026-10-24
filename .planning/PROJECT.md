@@ -8,6 +8,17 @@ Configuration and packaging repo for an OpenClaw AI agent gateway (Telegram) run
 
 The OpenClaw gateway image and config can be validated, built, and pushed to GHCR safely (no leaked secrets) so the infra repo can deploy them to the VPS.
 
+## Current Milestone: v1.1 GHCR Image Publish Workflow
+
+**Goal:** Publish the Docker images for an existing Git tag to GHCR from a manually triggered GitHub Actions workflow.
+
+**Target features:**
+- `workflow_dispatch` with a selectable existing tag (verified to exist, then checked out)
+- Run `validate-config.sh` and `check-secrets.sh` on that tag before building
+- Build and push `openclaw-gateway` and `workspace-sync` (linux/amd64) following `scripts/build-and-push.sh`
+- Tag images `:<git-tag>` and `:<short-sha>` (no `:latest`)
+- Authenticate to GHCR with `GITHUB_TOKEN` (`packages: write`)
+
 ## Requirements
 
 ### Validated
@@ -23,7 +34,7 @@ The OpenClaw gateway image and config can be validated, built, and pushed to GHC
 
 ### Active
 
-(None — no new work defined at initialization. Add requirements via `/gsd-new-milestone`.)
+- [ ] Manual GitHub Actions workflow builds and pushes both images to GHCR for a chosen existing Git tag (v1.1)
 
 ### Out of Scope
 
@@ -70,4 +81,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-24 after initialization*
+*Last updated: 2026-10-24 after starting milestone v1.1*
