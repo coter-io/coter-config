@@ -52,12 +52,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| TRIG-01 | Phase 1 | Pending |
+| TRIG-02 | Phase 1 | Pending |
+| TRIG-03 | Phase 1 | Pending |
+| TRIG-04 | Phase 1 | Pending |
+| VAL-01 | Phase 1 | Pending |
+| VAL-02 | Phase 1 | Pending |
+| SEC-02 | Phase 1 | Pending |
+| IMG-01 | Phase 2 | Pending |
+| IMG-02 | Phase 2 | Pending |
+| IMG-03 | Phase 2 | Pending |
+| IMG-04 | Phase 2 | Pending |
+| SEC-01 | Phase 2 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 11 total
-- Mapped to phases: 0
-- Unmapped: 11 ⚠️
+- v1.1 requirements: 12 total
+- Mapped to phases: 12
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-24*
-*Last updated: 2026-10-24 after initial definition*
+*Last updated: 2026-10-24 after roadmap creation*
