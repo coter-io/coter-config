@@ -124,8 +124,9 @@ edit → commit → push → build-and-push.sh → make deploy (infra repo)
 The **Publish image** workflow builds and pushes both images (`openclaw-gateway`, `workspace-sync`) to `ghcr.io/<repo owner>/openclaw-docker-config/` from an existing tag, using the same Dockerfiles as `build-and-push.sh`. It runs `validate-config.sh` and `check-secrets.sh` first.
 
 1. Create a tag with the **Create tag** workflow (Actions → Create tag → pick bump).
-2. Actions → **Publish image** → *Run workflow*. Under **Use workflow from**, switch to the **Tags** tab and select the tag. Running it from a branch fails immediately.
-3. Tick **Also tag and push :latest** only when you want `make deploy` to pick the image up. Unticked, images are pushed as `:<tag>` and `:<short sha>` only.
+2. Create a GitHub release for that tag (Releases → *Draft a new release* → choose the tag → *Publish release*). A draft does not count.
+3. Actions → **Publish image** → *Run workflow*. Under **Use workflow from**, switch to the **Tags** tab and select the tag. Running it from a branch, or from a tag with no published release, fails immediately.
+4. Tick **Also tag and push :latest** only when you want `make deploy` to pick the image up. Unticked, images are pushed as `:<tag>` and `:<short sha>` only.
 
 Notes:
 - Only tags that contain the workflow file can be built, so `v0.0.1` and `v1.0.0` are not buildable. The workflow must be on `main` before you cut a new tag.
