@@ -6,7 +6,7 @@
 # that needs a new binary, update this Dockerfile and rebuild.
 ###############################################################################
 
-FROM node:22-bookworm-slim
+FROM node:24.22-bookworm-slim
 
 # Install system dependencies as root
 RUN apt-get update && apt-get install -y --no-install-recommends \
