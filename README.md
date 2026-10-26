@@ -61,6 +61,34 @@ specific files from your local checkout to the VPS:
 5. Run `make deploy` from the infra repo — pulls the Docker image from GHCR and starts the container
 6. **Complete Telegram pairing:** open Telegram, find your bot, send `/start`
 
+## Models (OpenRouter)
+
+All models are routed through [OpenRouter](https://openrouter.ai) with a single `OPENROUTER_API_KEY`. Prices are approximate USD per million input/output tokens and drift, so re-check the [model catalog](https://openrouter.ai/models) before changing them.
+
+| Slot (`agents.defaults`) | Model | ~Price |
+|---|---|---|
+| `model` (default) | `anthropic/claude-haiku-5.5` | 0.10 / 0.50 |
+| `model.fallbacks` | `openai/gpt-6.1-terra`, `google/gemini-3.6-flash` | 1 / 5, 0.75 / 3.75 |
+| `utilityModel` (titles, recaps) | `qwen/qwen3.7-flash` | 0.03 / 0.13 |
+| `imageModel` (vision, only if the primary lacks image input) | `qwen/qwen3.8-flash` | 0.15 / 0.47 |
+| `pdfModel` | `google/gemini-3.1-flash-lite` | 0.25 / 1.5 |
+| `mediaModels.image` (image generation) | `google/gemini-3.1-flash-image` | 0.50 / 3 |
+
+Fallbacks only run when a request fails, not when an answer is weak. For a hard task, escalate manually in Telegram: `/model sonnet` (Claude Sonnet 5.5, ~2 / 10) or `/model terra`.
+
+Audio transcription (`tools.media.audio`) still calls OpenAI directly, so `OPENAI_API_KEY` must stay set.
+
+### Heartbeat model
+
+The heartbeat is an automation job, not an `openclaw.json` key (`agents.defaults.heartbeat` is deprecated). After deploying, set it to the cheapest model on the VPS:
+
+```bash
+openclaw automations edit <job-id> --model openrouter/qwen/qwen3.7-flash
+openclaw automations show <job-id>
+```
+
+Add `--fallbacks <list>` to set per-job fallbacks, or `--clear-model` to revert to the agent default.
+
 ## Config Change Workflow
 
 There are two types of changes, and they have different workflows:
