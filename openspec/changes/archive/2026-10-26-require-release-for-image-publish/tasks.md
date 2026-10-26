@@ -11,5 +11,5 @@
 
 ## 3. Integration checks
 
-- [ ] 3.1 After merging to `main`, dispatch **Publish image** from an existing tag with no release and verify it fails at the release check with the expected message and pushes nothing.
-- [ ] 3.2 Create a release for that tag, re-dispatch, and verify the release check passes and images are pushed.
+- [x] 3.1 After merging to `main`, dispatch **Publish image** from an existing tag with no release and verify it fails at the release check with the expected message and pushes nothing.
+- [x] 3.2 Create a release for that tag, re-dispatch, and verify the release check passes and images are pushed.
