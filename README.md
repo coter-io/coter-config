@@ -328,7 +328,7 @@ echo "$GH_TOKEN" | docker login ghcr.io -u $GHCR_USERNAME --password-stdin
 docker compose pull && docker compose up -d
 ```
 
-**Upgrade OpenClaw itself:** bump `OPENCLAW_VERSION` in `docker/Dockerfile`, commit, push, then run `scripts/build-and-push.sh` followed by `make deploy` from the infra repo.
+**Upgrade OpenClaw itself:** bump `OPENCLAW_VERSION` in `docker/Dockerfile`, commit, push, then run `scripts/build-and-push.sh` followed by `make deploy` from the infra repo. A new OpenClaw release can raise its minimum Node version (the install fails with an "requires Node" error); if so, bump the `FROM node:` base image in the same Dockerfile to match.
 
 ## Troubleshooting
 
