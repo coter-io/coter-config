@@ -14,7 +14,13 @@
       "dmPolicy": "allowlist",
       "allowFrom": ["tg:${TELEGRAM_USER_ID}"],
       "groupPolicy": "disabled",
-      "streaming": "partial"
+      "streaming": {
+        "mode": "partial",
+        "chunkMode": "newline",
+        "preview": {
+          "toolProgress": true
+        }
+      }
     }
   },
 
@@ -54,10 +60,7 @@
           "openrouter/google/gemini-3.6-flash"
         ]
       },
-      "utilityModel": {
-        "primary": "openrouter/qwen/qwen3.7-flash",
-        "fallbacks": ["openrouter/openai/gpt-oss-20b"]
-      },
+      "utilityModel": "openrouter/qwen/qwen3.7-flash",
       "imageModel": {
         "primary": "openrouter/qwen/qwen3.8-flash",
         "fallbacks": ["openrouter/google/gemini-3.1-flash-lite"]
@@ -76,6 +79,14 @@
         "openrouter/anthropic/claude-sonnet-5.5": { "alias": "sonnet" },
         "openrouter/openai/gpt-6.1-terra": { "alias": "terra" }
       },
+      "modelPolicy": {
+        "allow": [
+          "openrouter/anthropic/claude-haiku-5.5",
+          "openrouter/openai/gpt-6.1-terra",
+          "openrouter/google/gemini-3.6-flash",
+          "openrouter/anthropic/claude-sonnet-5.5"
+        ]
+      },
       "compaction": {
         "mode": "safeguard"
       },
@@ -84,16 +95,14 @@
         "maxConcurrent": 4
       }
     },
-    "list": [
-      {
-        "id": "main",
-        "default": true,
+    "entries": {
+      "main": {
         "identity": {
           "name": "Coter",
           "emoji": "🔘"
         }
       }
-    ]
+    }
   },
 
   "commands": {
@@ -106,15 +115,14 @@
 
   "tools": {
     "media": {
-      "audio": {
-        "models": [
-          {
-            "type": "provider",
-            "provider": "openai",
-            "model": "gpt-4o-transcribe-mini"
-          }
-        ]
-      }
+      "models": [
+        {
+          "type": "provider",
+          "provider": "openai",
+          "model": "gpt-4o-transcribe-mini",
+          "capabilities": ["audio"]
+        }
+      ]
     }
   },
 
@@ -132,7 +140,6 @@
 
   "logging": {
     "level": "info",
-    "consoleLevel": "info",
-    "redactSensitive": "tools"
+    "consoleLevel": "info"
   }
 }

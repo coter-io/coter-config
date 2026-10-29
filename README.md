@@ -69,14 +69,23 @@ All models are routed through [OpenRouter](https://openrouter.ai) with a single 
 |---|---|---|
 | `model` (default) | `anthropic/claude-haiku-5.5` | 0.10 / 0.50 |
 | `model.fallbacks` | `openai/gpt-6.1-terra`, `google/gemini-3.6-flash` | 1 / 5, 0.75 / 3.75 |
-| `utilityModel` (titles, recaps) | `qwen/qwen3.7-flash` | 0.03 / 0.13 |
+| `utilityModel` (titles, recaps) — single ref, no fallback | `qwen/qwen3.7-flash` | 0.03 / 0.13 |
 | `imageModel` (vision, only if the primary lacks image input) | `qwen/qwen3.8-flash` | 0.15 / 0.47 |
 | `pdfModel` | `google/gemini-3.1-flash-lite` | 0.25 / 1.5 |
 | `mediaModels.image` (image generation) | `google/gemini-3.1-flash-image` | 0.50 / 3 |
 
-Fallbacks only run when a request fails, not when an answer is weak. For a hard task, escalate manually in Telegram: `/model sonnet` (Claude Sonnet 5.5, ~2 / 10) or `/model terra`.
+Fallbacks only run when a request fails, not when an answer is weak. `utilityModel` takes a
+single ref — the config schema has no fallback list for that slot.
 
-Audio transcription (`tools.media.audio`) still calls OpenAI directly, so `OPENAI_API_KEY` must stay set.
+For a hard task, escalate manually in Telegram: `/model sonnet` (Claude Sonnet 5.5, ~2 / 10)
+or `/model terra`. Which models `/model` will accept is set by `agents.defaults.modelPolicy.allow`,
+which lists the default, its fallbacks, and both aliases — anything outside that list is
+refused, so a premium model cannot be selected by accident. `agents.defaults.models` only
+defines the aliases; adding an alias there does not make a model selectable unless its ref is
+also in the allowlist.
+
+Audio transcription is configured as a capability-tagged entry in `tools.media.models`
+(`capabilities: ["audio"]`) and still calls OpenAI directly, so `OPENAI_API_KEY` must stay set.
 
 ### Heartbeat model
 
@@ -365,9 +374,18 @@ sudo chown -R 1000:1000 /home/openclaw/.openclaw
 bash scripts/validate-config.sh
 ```
 
+The script runs three checks: JSON syntax, a raw-credential scan, and the config
+schema of the OpenClaw version pinned in `docker/Dockerfile`. The schema check runs
+`openclaw config validate` inside a throwaway container, because the pinned version
+needs Node >= 24.22.1 — so **Docker must be running**, and the check fails rather than
+skipping if it is not.
+
 Common causes:
 - Invalid JSON syntax (missing comma, trailing comma)
 - Raw API key accidentally pasted into `openclaw.json`
+- A key whose shape moved in a newer OpenClaw release. The output names each one and
+  its canonical replacement. Legacy keys fail the script even when the gateway would
+  still boot with them, so drift is caught here instead of at startup.
 
 ### Check VPS health
 
