@@ -44,7 +44,14 @@ jobs:
         run: bash scripts/check-env-vars.sh
 
       - name: Validate compose file
-        run: docker compose -f docker/docker-compose.yml config -q
+        run: |
+          # The gateway service declares `env_file: .env`, which is supplied by
+          # the operator and deliberately not committed. Compose refuses to read
+          # the file at all without it, so create an empty one — the values
+          # interpolation needs come from `env:` below, not from this file.
+          # Guarded so running this step locally never clobbers a real .env.
+          [ -f docker/.env ] || : > docker/.env
+          docker compose -f docker/docker-compose.yml config -q
         env:
           # The required variables are marked :? in compose, so interpolation
           # fails without values. These are throwaway values that prove the file
