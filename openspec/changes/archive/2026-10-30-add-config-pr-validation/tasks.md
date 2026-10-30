@@ -40,11 +40,11 @@
 
 ## 6. End-to-end verification
 
-- [ ] 6.1 Open the pull request for this change and verify **Validate config** starts automatically, runs every step, and passes
-- [ ] 6.2 Push a commit carrying a deliberately broken config, verify the gate fails with output naming the file, the key and its remedy, then revert that commit and verify the gate returns to passing on the new head
-- [ ] 6.3 Verify the superseded-run behavior by pushing two commits in quick succession and confirming the earlier run is cancelled and only the newer one reports a conclusion
-- [ ] 6.4 Verify the advisory step's output appears in the run log and reports the shipped config as accepted by the newest published release
-- [ ] 6.5 Run `openspec validate add-config-pr-validation --strict` and verify it reports no issues
+- [x] 6.1 Open the pull request for this change and verify **Validate config** starts automatically, runs every step, and passes
+- [x] 6.2 Push a commit carrying a deliberately broken config, verify the gate fails with output naming the file, the key and its remedy, then revert that commit and verify the gate returns to passing on the new head (verified by the maintainer on the live pull request)
+- [x] 6.3 Verify the superseded-run behavior by pushing two commits in quick succession and confirming the earlier run is cancelled and only the newer one reports a conclusion (verified by the maintainer on the live pull request)
+- [x] 6.4 Verify the advisory step's output appears in the run log and reports the shipped config as accepted by the newest published release (verified by the maintainer on the live pull request)
+- [x] 6.5 Run `openspec validate add-config-pr-validation --strict` and verify it reports no issues
 
 ## Workflow follow-up
 
