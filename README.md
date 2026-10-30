@@ -63,7 +63,7 @@ specific files from your local checkout to the VPS:
 
 ## Models (OpenRouter)
 
-All models are routed through [OpenRouter](https://openrouter.ai) with a single `OPENROUTER_API_KEY`. Prices are approximate USD per million input/output tokens and drift, so re-check the [model catalog](https://openrouter.ai/models) before changing them.
+All models are routed through [OpenRouter](https://openrouter.ai) with a single `OPENROUTER_API_KEY`. Prices are approximate USD per million input/output tokens — except where a row says otherwise — and drift, so re-check the [model catalog](https://openrouter.ai/models) before changing them.
 
 | Slot (`agents.defaults`) | Model | ~Price |
 |---|---|---|
@@ -73,6 +73,15 @@ All models are routed through [OpenRouter](https://openrouter.ai) with a single 
 | `imageModel` (vision, only if the primary lacks image input) | `qwen/qwen3.8-flash` | 0.15 / 0.47 |
 | `pdfModel` | `google/gemini-3.1-flash-lite` | 0.25 / 1.5 |
 | `mediaModels.image` (image generation) | `google/gemini-3.1-flash-image` | 0.50 / 3 |
+| `tools.media.models` † (audio transcription) | `openai/whisper-large-v3-turbo`, fallback `openai/gpt-4o-mini-transcribe` | ~0.012 per audio-hour; 1.25 / 5 |
+
+† This slot is the one exception to the two conventions above. It lives at the config root rather
+than under `agents.defaults`, and each entry is tagged `capabilities: ["audio"]`. Its `model` value
+is a **bare upstream OpenRouter slug** — `openai/whisper-large-v3-turbo`, not
+`openrouter/openai/whisper-large-v3-turbo` — because the entry names `provider: "openrouter"` in a
+separate field; prefixing it would send a slug that does not exist. The primary also bills per
+second of audio rather than per token, so its price is not comparable to the other rows; the
+`gpt-4o-mini-transcribe` fallback bills per token like the rest.
 
 Fallbacks only run when a request fails, not when an answer is weak. `utilityModel` takes a
 single ref — the config schema has no fallback list for that slot.
@@ -84,8 +93,19 @@ refused, so a premium model cannot be selected by accident. `agents.defaults.mod
 defines the aliases; adding an alias there does not make a model selectable unless its ref is
 also in the allowlist.
 
-Audio transcription is configured as a capability-tagged entry in `tools.media.models`
-(`capabilities: ["audio"]`) and still calls OpenAI directly, so `OPENAI_API_KEY` must stay set.
+Audio transcription routes through OpenRouter like everything else, so `OPENROUTER_API_KEY` is the
+only model credential the deployment needs — there is no second vendor key to provision. Inbound
+voice notes are transcribed before the reply pipeline runs, and the transcript is what the agent
+sees.
+
+One caveat worth knowing before you send voice notes. The
+`models.providers.openrouter.params.provider` routing policy — `data_collection: "deny"` and
+`require_parameters: true` — applies to chat-completions requests only. Transcription uses
+OpenRouter's separate `/audio/transcriptions` endpoint, whose request body carries just the model,
+the audio and an optional language hint, so **voice audio is sent without the `data_collection:
+"deny"` preference that text requests carry**. In OpenClaw `2026.10.7` no config key changes this:
+the per-entry `providerOptions` accepts only scalar values, and `headers`/`request` affect
+transport rather than the request body. Text and images are unaffected.
 
 ### Heartbeat model
 

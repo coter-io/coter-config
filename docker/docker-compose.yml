@@ -11,9 +11,8 @@ services:
       NODE_ENV: production
       # Marked :? so an unset value stops the stack with a named error. Plain
       # ${VAR} substitutes a blank string and boots half-broken instead.
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?required for audio transcription, set it in docker/.env}
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?required, generate with openssl rand -hex 32}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?required for all chat models, set it in docker/.env}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?required for all models, audio transcription included, set it in docker/.env}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?required, create a bot with BotFather}
       TELEGRAM_USER_ID: ${TELEGRAM_USER_ID:?required for the DM allowlist, get it from userinfobot}
       COMPOSIO_API_KEY: ${COMPOSIO_API_KEY:?required by mcp.servers.composio in openclaw.json}

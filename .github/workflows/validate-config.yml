@@ -58,7 +58,6 @@ jobs:
           # parses and interpolates; no real credential is involved.
           GHCR_USERNAME: ci-placeholder
           OPENROUTER_API_KEY: ci-placeholder
-          OPENAI_API_KEY: ci-placeholder
           OPENCLAW_GATEWAY_TOKEN: ci-placeholder
           TELEGRAM_BOT_TOKEN: ci-placeholder
           TELEGRAM_USER_ID: "1"
