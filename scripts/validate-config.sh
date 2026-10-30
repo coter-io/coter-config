@@ -2,14 +2,32 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CONFIG="$REPO_ROOT/config/openclaw.json"
 DOCKERFILE="$REPO_ROOT/docker/Dockerfile"
+
+# Defaults to the shipped config. The optional argument exists so the negative
+# cases (unrecognized keys, legacy shapes, tolerated drift) can be exercised
+# against scratch copies; every gate — pre-commit, pull request, release —
+# passes no argument and therefore validates the shipped config.
+CONFIG="${1:-$REPO_ROOT/config/openclaw.json}"
+if [[ ! -f "$CONFIG" ]]; then
+  echo "ERROR: $CONFIG does not exist"
+  exit 1
+fi
 
 echo "Validating $CONFIG ..."
 
+# Every check below fails closed. A validation gate that skips when its tooling
+# is missing is how schema drift reached a published image once already.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "ERROR: jq is required to validate $CONFIG"
+  echo "Install it (brew install jq / apt-get install jq) and retry."
+  exit 1
+fi
+
 # 1. Check valid JSON
-if ! jq empty "$CONFIG" 2>/dev/null; then
+if ! JSON_ERROR="$(jq empty "$CONFIG" 2>&1)"; then
   echo "ERROR: $CONFIG is not valid JSON"
+  echo "$JSON_ERROR"
   exit 1
 fi
 
@@ -25,7 +43,10 @@ fi
 # 3. Check the config against the schema of the pinned OpenClaw version.
 # The version and node base both come from docker/Dockerfile, so this check and
 # the gateway image can never disagree about which schema applies.
-OPENCLAW_VERSION="$(sed -nE 's/^ARG OPENCLAW_VERSION=([^[:space:]]+).*/\1/p' "$DOCKERFILE" | head -1)"
+# OPENCLAW_VERSION_OVERRIDE exists so check-forward-compat.sh can run this exact
+# gate against a different release. Unset — which is how every gate invokes it —
+# the version comes from the Dockerfile pin and nowhere else.
+OPENCLAW_VERSION="${OPENCLAW_VERSION_OVERRIDE:-$(sed -nE 's/^ARG OPENCLAW_VERSION=([^[:space:]]+).*/\1/p' "$DOCKERFILE" | head -1)}"
 if [[ -z "$OPENCLAW_VERSION" ]]; then
   echo "ERROR: Could not read ARG OPENCLAW_VERSION from $DOCKERFILE"
   echo "The schema check needs the pinned version; it will not fall back to an unpinned release."
@@ -45,23 +66,39 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Checking schema against openclaw@$OPENCLAW_VERSION ($NODE_IMAGE) ..."
+# Supply values for the config's ${VAR} placeholders through the environment.
+# The pinned runtime expands ${VAR} from the process environment natively, so
+# the shipped file is validated exactly as written — there is no substituted
+# copy, and nothing here rewrites the real config. Only unset variables are
+# defaulted, so real values already in the caller's shell are used when present.
+# URL-named variables get a well-formed URL because some fields (e.g.
+# mcp.servers.*.url) are format-validated and reject an opaque token.
+ENV_ARGS=()
+# shellcheck disable=SC2016  # tr deletes the literal characters $ { }, so single quotes are intended
+PLACEHOLDERS="$(grep -oE '\$\{[A-Za-z0-9_]+\}' "$CONFIG" | tr -d '${}' | sort -u || true)"
+while IFS= read -r var; do
+  [[ -z "$var" ]] && continue
+  if [[ -n "${!var:-}" ]]; then
+    ENV_ARGS+=(-e "$var=${!var}")
+  elif [[ "$var" == *URL* ]]; then
+    ENV_ARGS+=(-e "$var=https://example.invalid/placeholder")
+  else
+    ENV_ARGS+=(-e "$var=placeholder")
+  fi
+done <<< "$PLACEHOLDERS"
 
-# Substitute ${VAR} placeholders with well-formed dummy values in a throwaway
-# copy. Some fields (e.g. mcp.servers.*.url) are format-validated, so a literal
-# placeholder fails on its syntax. The schema check is about config shape, not
-# about resolving secrets, and the real config is never modified.
-SUBSTITUTED_CONFIG="$(mktemp "${TMPDIR:-/tmp}/openclaw-config-validate.XXXXXX")"
-trap 'rm -f "$SUBSTITUTED_CONFIG"' EXIT
-sed -E \
-  -e 's#\$\{[A-Za-z0-9_]*URL[A-Za-z0-9_]*\}#https://example.invalid/placeholder#g' \
-  -e 's#\$\{[A-Za-z0-9_]+\}#placeholder#g' \
-  "$CONFIG" > "$SUBSTITUTED_CONFIG"
+# doctor's gateway-auth check reads a token that legitimately lives in the
+# environment rather than in the config. Supplying a dummy keeps that check
+# running honestly instead of suppressing it below.
+ENV_ARGS+=(-e "OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-0123456789abcdef0123456789abcdef}")
+
+echo "Checking schema against openclaw@$OPENCLAW_VERSION ($NODE_IMAGE) ..."
 
 set +e
 SCHEMA_OUTPUT="$(docker run --rm \
-  -v "$SUBSTITUTED_CONFIG:/cfg/openclaw.json:ro" \
+  -v "$CONFIG:/cfg/openclaw.json:ro" \
   -e OPENCLAW_CONFIG_PATH=/cfg/openclaw.json \
+  "${ENV_ARGS[@]}" \
   "$NODE_IMAGE" \
   npx -y "openclaw@$OPENCLAW_VERSION" config validate 2>&1)"
 SCHEMA_STATUS=$?
@@ -71,28 +108,62 @@ echo "$SCHEMA_OUTPUT"
 
 if [[ "$SCHEMA_STATUS" -ne 0 ]]; then
   echo "ERROR: openclaw@$OPENCLAW_VERSION rejected $CONFIG"
+  echo "Each line above names the key at fault and where it sits in the file."
+  echo "Run 'openclaw config schema' to inspect the supported shape of that key."
   exit 1
 fi
 
-# 4. Check for legacy keys — drift that has not turned fatal yet.
-# `config validate` only reports hard schema errors: it calls a config with
-# legacy-only drift "valid" and exits 0. `doctor` names each legacy key but also
-# exits 0, so the output is what decides here. COLUMNS keeps doctor's boxed
-# output wide enough that the phrase is not wrapped mid-match.
-echo "Checking for legacy keys ..."
+# 4. Check for defects the schema accepts but the runtime considers unhealthy.
+# `config validate` above reports hard errors and renamed keys, but accepts a
+# config that is structurally fine and still wrong — a hardcoded credential in a
+# secret-bearing field validates as a string and is reported only here, as
+# core/doctor/security at warning severity. That class surfaces only as a health
+# finding, so the structured lint runs too — and it runs second, because
+# doctor short-circuits after a failed config validation (measured: checksRun=1)
+# and would report nothing about the other checks.
+#
+# The lint's exit code does not track its own verdict: measured against
+# 2026.10.7, a config with a severity:error finding exited 0 while a clean
+# config exited 1 on an unrelated network check. So the JSON payload decides and
+# the exit code is deliberately ignored.
+#
+# Skipped checks describe the environment validation runs in, not the config:
+#   runtime-tool-schemas        — dials the configured MCP endpoint over the network
+#   heartbeat-cadence-migration — wants runtime cron state that lives on the VPS
+#   node-hosting-preconditions  — flags loopback bind, but --bind lan comes from compose
+echo "Checking health findings against openclaw@$OPENCLAW_VERSION ..."
 
 set +e
 DOCTOR_OUTPUT="$(docker run --rm \
-  -v "$SUBSTITUTED_CONFIG:/cfg/openclaw.json:ro" \
+  -v "$CONFIG:/cfg/openclaw.json:ro" \
   -e OPENCLAW_CONFIG_PATH=/cfg/openclaw.json \
-  -e COLUMNS=200 \
+  "${ENV_ARGS[@]}" \
   "$NODE_IMAGE" \
-  npx -y "openclaw@$OPENCLAW_VERSION" doctor --no-color 2>&1)"
+  npx -y "openclaw@$OPENCLAW_VERSION" doctor --lint --json \
+    --severity-min warning \
+    --skip core/doctor/runtime-tool-schemas \
+    --skip core/doctor/heartbeat-cadence-migration \
+    --skip core/doctor/node-hosting-preconditions 2>/dev/null)"
 set -e
 
-if grep -q "Legacy config keys detected" <<<"$DOCTOR_OUTPUT"; then
-  echo "ERROR: openclaw@$OPENCLAW_VERSION reported legacy config keys in $CONFIG"
-  grep -A20 "Legacy config keys detected" <<<"$DOCTOR_OUTPUT"
+DOCTOR_JSON="$(grep -E '^\{' <<<"$DOCTOR_OUTPUT" | tail -1 || true)"
+
+if [[ -z "$DOCTOR_JSON" ]] || ! jq empty <<<"$DOCTOR_JSON" 2>/dev/null; then
+  echo "ERROR: could not read health findings from openclaw@$OPENCLAW_VERSION"
+  echo "The lint produced no JSON payload to judge, so validation cannot pass."
+  echo "$DOCTOR_OUTPUT"
+  exit 1
+fi
+
+DOCTOR_OK="$(jq -r '.ok' <<<"$DOCTOR_JSON")"
+FINDING_COUNT="$(jq -r '.findings | length' <<<"$DOCTOR_JSON")"
+
+if [[ "$DOCTOR_OK" != "true" ]] || [[ "$FINDING_COUNT" -ne 0 ]]; then
+  echo "ERROR: openclaw@$OPENCLAW_VERSION reported health findings for $CONFIG"
+  jq -r '.findings[]
+    | "  - [\(.severity)] \(.path // "config"): \(.message)"
+      + "\n    fix: \(.fixHint // "see openclaw doctor output")"
+      + "\n    check: \(.checkId)"' <<<"$DOCTOR_JSON"
   echo "Migrate each key named above to its canonical shape."
   exit 1
 fi

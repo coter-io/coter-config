@@ -1,0 +1,83 @@
+name: Validate config
+
+# Deliberately no `paths:` filter. A path-filtered workflow reports no
+# conclusion on pull requests that miss the filter, so making this a required
+# status check would leave unrelated pull requests permanently unmergeable.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-config-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Steps run cheap-and-offline first, so their findings are reported even
+      # when the container-based checks cannot start. Every check invokes a
+      # repository script rather than reimplementing it here, so this gate, the
+      # pre-commit hook and the release gate cannot disagree about what valid
+      # means.
+      - name: Check JSON syntax
+        run: |
+          if ! error="$(jq empty config/openclaw.json 2>&1)"; then
+            echo "::error file=config/openclaw.json::${error}"
+            exit 1
+          fi
+          echo "config/openclaw.json parses as JSON"
+
+      - name: Scan for secrets
+        run: bash scripts/check-secrets.sh
+
+      - name: Check environment variable contract
+        run: bash scripts/check-env-vars.sh
+
+      - name: Validate compose file
+        run: docker compose -f docker/docker-compose.yml config -q
+        env:
+          # The required variables are marked :? in compose, so interpolation
+          # fails without values. These are throwaway values that prove the file
+          # parses and interpolates; no real credential is involved.
+          GHCR_USERNAME: ci-placeholder
+          OPENROUTER_API_KEY: ci-placeholder
+          OPENAI_API_KEY: ci-placeholder
+          OPENCLAW_GATEWAY_TOKEN: ci-placeholder
+          TELEGRAM_BOT_TOKEN: ci-placeholder
+          TELEGRAM_USER_ID: "1"
+          COMPOSIO_API_KEY: ci-placeholder
+          COMPOSIO_MCP_URL: https://example.invalid/placeholder
+
+      - name: ShellCheck
+        run: |
+          shellcheck --version
+          shellcheck \
+            scripts/*.sh \
+            .githooks/pre-commit \
+            docker/entrypoint.sh \
+            docker/workspace-sync/*.sh
+
+      # Authoritative check: the config against the schema and health lint of
+      # the exact OpenClaw version pinned in docker/Dockerfile. Runs the
+      # repository script unchanged, which resolves the pin itself and fails
+      # rather than falling back to an unpinned release.
+      - name: Validate config against the pinned OpenClaw version
+        run: bash scripts/validate-config.sh
+
+      # Advisory only. The gateway runs the pinned version, so the newest
+      # release's opinion is upgrade-readiness information, not a verdict on
+      # this pull request. A `latest` publish must never turn every pull
+      # request red.
+      - name: Forward-compatibility check against the newest release
+        continue-on-error: true
+        run: bash scripts/check-forward-compat.sh

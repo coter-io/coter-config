@@ -23,4 +23,13 @@ if ! "$REPO_ROOT/scripts/check-secrets.sh"; then
 fi
 
 echo ""
+
+# Check the environment variable contract — same check the pull request gate runs
+if ! "$REPO_ROOT/scripts/check-env-vars.sh"; then
+  echo ""
+  echo "Pre-commit check failed: undocumented environment variables. Document them and retry."
+  exit 1
+fi
+
+echo ""
 echo "All pre-commit checks passed."

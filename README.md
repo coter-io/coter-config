@@ -111,7 +111,7 @@ edit → validate → commit → push → make push-config (infra repo)
 ```
 
 1. Edit files in `config/`, `skills/`, or `hooks/`
-2. Validate: `bash scripts/validate-config.sh`
+2. Validate: `bash scripts/validate-config.sh` and `bash scripts/check-env-vars.sh`
 3. Commit and push to GitHub
 4. From the **infra repo**: `make push-config` (SCPs config to VPS and restarts)
 
@@ -374,18 +374,56 @@ sudo chown -R 1000:1000 /home/openclaw/.openclaw
 bash scripts/validate-config.sh
 ```
 
-The script runs three checks: JSON syntax, a raw-credential scan, and the config
-schema of the OpenClaw version pinned in `docker/Dockerfile`. The schema check runs
-`openclaw config validate` inside a throwaway container, because the pinned version
-needs Node >= 24.22.1 — so **Docker must be running**, and the check fails rather than
-skipping if it is not.
+The script runs four checks: JSON syntax, a raw-credential scan, the config schema of
+the OpenClaw version pinned in `docker/Dockerfile`, and that version's own health
+lint. Both of the last two run inside a throwaway container, because the pinned
+version needs Node >= 24.22.1 — so **Docker must be running**, and the checks fail
+rather than skipping if it is not. `jq` is required too.
+
+The config's `${ENV_VAR}` placeholders are supplied through the container's
+environment, which the runtime expands natively, so the file is validated exactly as
+it is committed — nothing is substituted and no copy is made. Values already set in
+your shell are used as-is; anything unset gets a well-formed dummy, so validation
+needs no real secrets.
 
 Common causes:
 - Invalid JSON syntax (missing comma, trailing comma)
-- Raw API key accidentally pasted into `openclaw.json`
+- Raw API key accidentally pasted into `openclaw.json`. The credential scan catches
+  known key prefixes, and the health lint catches any other hardcoded value sitting in
+  a secret-bearing field — the schema accepts it as a string, so this is the check
+  that reports it.
 - A key whose shape moved in a newer OpenClaw release. The output names each one and
-  its canonical replacement. Legacy keys fail the script even when the gateway would
-  still boot with them, so drift is caught here instead of at startup.
+  its canonical replacement, with the line it sits on. Legacy keys fail the script
+  even when the gateway would still boot with them, so drift is caught here instead of
+  at startup.
+- A health finding at `warning` or above. The lint is read as JSON and judged by its
+  findings, not by its exit code, which does not track the verdict. Three checks are
+  skipped by name because they describe the machine running validation rather than the
+  config; each is commented in the script with the reason.
+
+To validate a file other than the committed config — handy when reproducing a failure
+— pass it as an argument: `bash scripts/validate-config.sh /tmp/candidate.json`.
+
+### Environment variable contract fails
+
+```bash
+bash scripts/check-env-vars.sh
+```
+
+Every `${VAR}` referenced by `config/openclaw.json` or `docker/docker-compose.yml` must
+be declared in `docker/.env.example` under the same name. The check needs no Docker and
+runs offline.
+
+It reports the variable, the file that references it, and — when the name looks like a
+misspelling of one already documented — the name to reconcile it with. That pairing is
+the case worth watching: a variable documented under one spelling and injected under
+another reaches the container empty, so the feature depending on it fails silently
+rather than loudly.
+
+Comments are ignored in both files, so the commented-out multi-agent block in
+`docker-compose.yml` does not require its per-agent variables to be declared. The check
+is one-directional: a variable documented but referenced by neither file is allowed,
+since `.env.example` also documents values consumed outside these two files.
 
 ### Check VPS health
 
