@@ -27,6 +27,34 @@ Enhancement suggestions are tracked as GitHub issues:
 
 ### Pull Requests
 
+Every pull request against `main` is validated automatically by the **Validate config**
+workflow. It runs on every pull request regardless of which files you changed, so it
+always reports a conclusion and can be relied on as a required check. It needs no
+secrets and runs on forks.
+
+The workflow runs the same scripts you can run locally, in this order — cheap offline
+checks first, so you get every finding even if a later step cannot start:
+
+| Check | Command |
+|---|---|
+| JSON syntax | `jq empty config/openclaw.json` |
+| Secret scan | `bash scripts/check-secrets.sh` |
+| Environment variable contract | `bash scripts/check-env-vars.sh` |
+| Compose file | `docker compose -f docker/docker-compose.yml config -q` |
+| Shell scripts | `shellcheck scripts/*.sh .githooks/pre-commit docker/entrypoint.sh docker/workspace-sync/*.sh` |
+| Config against the pinned OpenClaw version | `bash scripts/validate-config.sh` |
+| Newest release (advisory, never fails) | `bash scripts/check-forward-compat.sh` |
+
+Run the two most likely to catch you out before pushing:
+
+```bash
+bash scripts/validate-config.sh
+bash scripts/check-env-vars.sh
+```
+
+Enabling the pre-commit hook (`git config core.hooksPath .githooks`) runs them for you
+on every commit.
+
 1. **Fork the repository** and create your branch from `main`
 2. **Test your changes**:
    - Build the Docker image locally
@@ -65,8 +93,13 @@ docker compose build
 When adding or modifying configuration:
 
 - Use environment variables for all user-specific values
-- Provide sensible defaults with `${VAR:-default}` syntax
-- Document all variables in `docker/.env.example`
+- Provide sensible defaults with `${VAR:-default}` syntax; interpolate without a
+  default only when the deployment genuinely cannot run without the value
+- Document all variables in `docker/.env.example`, under the same name they are
+  referenced by, and with the source an operator uses to obtain the value. This is
+  enforced by `bash scripts/check-env-vars.sh`, which runs in the pull request gate —
+  a variable documented under one spelling and injected under another reaches the
+  container empty
 - Keep skills minimal and generic
 - Avoid hardcoding paths, usernames, or domains
 

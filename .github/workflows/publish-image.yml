@@ -49,6 +49,11 @@ jobs:
       - name: Scan for secrets
         run: bash scripts/check-secrets.sh
 
+      # Same contract the pull request gate enforces, so a tag cannot publish
+      # with an undocumented or misnamed environment variable.
+      - name: Check environment variable contract
+        run: bash scripts/check-env-vars.sh
+
       - name: Compute image coordinates
         id: meta
         env:

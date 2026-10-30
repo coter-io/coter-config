@@ -19,8 +19,18 @@ PATTERNS=(
   'Bearer [A-Za-z0-9._-]{20,}'
 )
 
-# Get all tracked files, skip .env.example and *.md
-FILES=$(cd "$REPO_ROOT" && git ls-files | grep -v '\.env\.example$' | grep -v '\.md$' || true)
+# Get all tracked files, skip .env.example and *.md.
+# A git failure has to be fatal: folded into the pipeline below it produced an
+# empty list, and an empty list reported "no secrets" without having scanned
+# anything — a scanner that passes by failing.
+if ! TRACKED="$(git -C "$REPO_ROOT" ls-files)"; then
+  echo "ERROR: could not list tracked files in $REPO_ROOT"
+  echo "The scan cannot pass without a file list to scan."
+  exit 1
+fi
+
+# grep exits 1 when every tracked file is filtered out, which is not an error.
+FILES="$(grep -vE '\.env\.example$|\.md$' <<<"$TRACKED" || true)"
 
 if [ -z "$FILES" ]; then
   echo "✓ No secrets detected in tracked files"

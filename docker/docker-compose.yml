@@ -1,6 +1,6 @@
 services:
   openclaw-gateway:
-    image: ghcr.io/${GHCR_USERNAME}/openclaw-docker-config/openclaw-gateway:latest
+    image: ghcr.io/${GHCR_USERNAME:?required, your GHCR namespace in lowercase}/openclaw-docker-config/openclaw-gateway:latest
     env_file: .env
     restart: unless-stopped
     environment:
@@ -9,13 +9,15 @@ services:
       GH_TOKEN: ${GH_TOKEN:-}
       HOME: /home/node
       NODE_ENV: production
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      TELEGRAM_USER_ID: ${TELEGRAM_USER_ID}
-      COMPOSIO_API_KEY: ${COMPOSIO_API_KEY}
-      COMPOSIO_MCP_URL: ${COMPOSIO_MCP_URL}
+      # Marked :? so an unset value stops the stack with a named error. Plain
+      # ${VAR} substitutes a blank string and boots half-broken instead.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?required for audio transcription, set it in docker/.env}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?required, generate with openssl rand -hex 32}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?required for all chat models, set it in docker/.env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?required, create a bot with BotFather}
+      TELEGRAM_USER_ID: ${TELEGRAM_USER_ID:?required for the DM allowlist, get it from userinfobot}
+      COMPOSIO_API_KEY: ${COMPOSIO_API_KEY:?required by mcp.servers.composio in openclaw.json}
+      COMPOSIO_MCP_URL: ${COMPOSIO_MCP_URL:?required, the gateway rejects its config without a valid URL}
       TERM: xterm-256color
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-/home/openclaw/.openclaw}:/home/node/.openclaw
@@ -25,7 +27,7 @@ services:
     command: openclaw gateway --bind lan --port 18789
 
   workspace-sync:
-    image: ghcr.io/${GHCR_USERNAME}/openclaw-docker-config/workspace-sync:latest
+    image: ghcr.io/${GHCR_USERNAME:?required, your GHCR namespace in lowercase}/openclaw-docker-config/workspace-sync:latest
     restart: unless-stopped
     environment:
       GIT_WORKSPACE_REPO: ${GIT_WORKSPACE_REPO:-}
