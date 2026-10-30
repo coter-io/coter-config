@@ -25,7 +25,7 @@ The system SHALL use `openrouter/anthropic/claude-haiku-5.5` as the default prim
 - **THEN** the configured fallbacks are tried in order, starting with `openrouter/openai/gpt-6.1-terra`
 
 ### Requirement: Task-specific model slots
-The system SHALL configure distinct models for short internal utility tasks, vision, PDF processing and image generation. Each slot whose schema accepts a fallback list SHALL name at least one fallback. The utility slot accepts a single model ref in the pinned OpenClaw version and SHALL therefore name exactly one model with no fallback.
+The system SHALL configure distinct models for short internal utility tasks, vision, PDF processing, image generation and audio transcription. Each slot whose schema accepts a fallback list SHALL name at least one fallback. The utility slot accepts a single model ref in the pinned OpenClaw version and SHALL therefore name exactly one model with no fallback.
 
 #### Scenario: Utility tasks use the cheapest tier
 - **WHEN** a session title or recap is generated
@@ -42,6 +42,44 @@ The system SHALL configure distinct models for short internal utility tasks, vis
 #### Scenario: Image generation
 - **WHEN** an image is generated
 - **THEN** the model comes from `agents.defaults.mediaModels.image` and its primary can output images
+
+#### Scenario: Audio transcription
+- **WHEN** an inbound audio attachment is transcribed
+- **THEN** the model comes from a `tools.media.models` entry tagged `capabilities: ["audio"]`, and at least one further audio-tagged entry is configured as a fallback
+
+#### Scenario: Audio understanding is enabled explicitly
+- **WHEN** `config/openclaw.json` is inspected
+- **THEN** `tools.media.audio.enabled` is set rather than left to the default-when-unset behaviour
+
+### Requirement: Inbound voice notes are transcribed
+The system SHALL transcribe an inbound voice or audio attachment and deliver the transcript to the reply pipeline, so a voice note reaches the agent as text rather than as a failure marker. Each configured audio entry SHALL name a model id the routing provider actually serves.
+
+#### Scenario: Voice note transcribed
+- **WHEN** the allowed user sends a Telegram voice note
+- **THEN** the message body the agent receives contains the transcript of that audio
+
+#### Scenario: Configured audio model ids are real
+- **WHEN** every `model` value in a `tools.media.models` entry tagged `capabilities: ["audio"]` is looked up in the routing provider's catalog
+- **THEN** each one resolves to an existing model
+
+#### Scenario: Primary audio model unavailable
+- **WHEN** the first audio entry fails or is skipped
+- **THEN** the next audio entry is tried before the attachment is reported as unprocessed
+
+### Requirement: OpenRouter is the only model-provider credential
+The system SHALL route every model call, including audio transcription, through OpenRouter, and SHALL NOT require a credential for any other model vendor. A vendor-specific key SHALL NOT be referenced by `config/openclaw.json`, `docker/docker-compose.yml`, or `docker/.env.example`.
+
+#### Scenario: No second model credential is referenced
+- **WHEN** `config/openclaw.json`, `docker/docker-compose.yml`, and `docker/.env.example` are inspected
+- **THEN** `OPENROUTER_API_KEY` is the only model-provider credential any of them references
+
+#### Scenario: Stack starts with one model credential
+- **WHEN** an operator starts the stack having set `OPENROUTER_API_KEY` and no other model-vendor key
+- **THEN** compose does not report a missing required variable for a model credential
+
+#### Scenario: Vendor model reached through OpenRouter
+- **WHEN** an entry names a model served by a vendor other than OpenRouter, such as an OpenAI transcription model
+- **THEN** it is reached as an OpenRouter-routed model and authenticated with the OpenRouter credential
 
 ### Requirement: Manual escalation aliases
 The system SHALL define `/model` aliases for a stronger model so a user can escalate a hard task without editing config, and SHALL include every aliased ref in the model override allowlist so the alias is selectable.
@@ -113,3 +151,18 @@ The system SHALL set OpenRouter provider routing defaults of `data_collection: "
 #### Scenario: Routing defaults
 - **WHEN** `config/openclaw.json` is inspected
 - **THEN** `models.providers.openrouter.params.provider` contains both settings
+
+### Requirement: Transcription requests are outside provider routing
+The system SHALL route audio transcription through the routing provider's transcription endpoint, which does not carry the provider routing policy configured for chat requests, and SHALL document that voice audio is sent without the data-collection preference text requests carry.
+
+#### Scenario: The limit is documented
+- **WHEN** the repository's audio documentation is read
+- **THEN** it states that the `data_collection` preference does not apply to transcription requests
+
+#### Scenario: Text and image requests are unaffected
+- **WHEN** a chat or image request is sent
+- **THEN** it still carries the configured provider routing policy
+
+#### Scenario: No configuration claims otherwise
+- **WHEN** `config/openclaw.json` is inspected
+- **THEN** no `tools.media.models` entry asserts a routing or data-collection preference that the transcription endpoint would not honour

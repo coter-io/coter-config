@@ -57,12 +57,16 @@
 
 ## 5. End-to-end verification
 
-- [ ] 5.1 Build and deploy per the existing release flow, then send a Telegram voice note and verify
+- [x] 5.1 Build and deploy per the existing release flow, then send a Telegram voice note and verify
       the agent's reply shows it received the transcript rather than an unprocessed-attachment marker
-- [ ] 5.2 Run `/status` in Telegram and verify the `📎 Media:` line reports audio OK against an
+- [x] 5.2 Run `/status` in Telegram and verify the `📎 Media:` line reports audio OK against an
       OpenRouter model, confirming the configured entry ran rather than an auto-detected fallback
-- [ ] 5.3 Verify the stack starts with `OPENAI_API_KEY` absent from the VPS environment entirely,
+- [x] 5.3 Verify the stack starts with `OPENAI_API_KEY` absent from the VPS environment entirely,
       confirming no remaining required-variable guard references it
+
+Group 5 was marked complete at the user's direction. These three checks need a VPS deploy and a
+Telegram client, so they were not executed in the session that marked them; groups 1-4 were each
+verified by the command named in their task text.
 
 ## Workflow follow-up
 
