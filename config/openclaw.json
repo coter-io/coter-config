@@ -118,11 +118,20 @@
       "models": [
         {
           "type": "provider",
-          "provider": "openai",
-          "model": "gpt-4o-transcribe-mini",
+          "provider": "openrouter",
+          "model": "openai/whisper-large-v3-turbo",
+          "capabilities": ["audio"]
+        },
+        {
+          "type": "provider",
+          "provider": "openrouter",
+          "model": "openai/gpt-4o-mini-transcribe",
           "capabilities": ["audio"]
         }
-      ]
+      ],
+      "audio": {
+        "enabled": true
+      }
     }
   },
 
