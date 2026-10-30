@@ -32,6 +32,21 @@ The system SHALL route every model call, including audio transcription, through 
 - **WHEN** an entry names a model served by a vendor other than OpenRouter, such as an OpenAI transcription model
 - **THEN** it is reached as an OpenRouter-routed model and authenticated with the OpenRouter credential
 
+### Requirement: Transcription requests are outside provider routing
+The system SHALL route audio transcription through the routing provider's transcription endpoint, which does not carry the provider routing policy configured for chat requests, and SHALL document that voice audio is sent without the data-collection preference text requests carry.
+
+#### Scenario: The limit is documented
+- **WHEN** the repository's audio documentation is read
+- **THEN** it states that the `data_collection` preference does not apply to transcription requests
+
+#### Scenario: Text and image requests are unaffected
+- **WHEN** a chat or image request is sent
+- **THEN** it still carries the configured provider routing policy
+
+#### Scenario: No configuration claims otherwise
+- **WHEN** `config/openclaw.json` is inspected
+- **THEN** no `tools.media.models` entry asserts a routing or data-collection preference that the transcription endpoint would not honour
+
 ## MODIFIED Requirements
 
 ### Requirement: Task-specific model slots
