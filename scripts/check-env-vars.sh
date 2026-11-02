@@ -3,6 +3,13 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG="$REPO_ROOT/config/openclaw.json"
+# The deployment compose file, and deliberately only that one. The contract
+# describes what an operator must supply to get a working *deployment*, so a
+# compose file no deployment consumes — docker/docker-compose.local.yml, which
+# only local.sh ever passes — is outside it, and the local-only variables it
+# interpolates are not required to appear in docker/.env.example. Keep those
+# confined to local paths nothing deployed reads; anything a deployment needs
+# belongs in the file named here, where this check sees it.
 COMPOSE="$REPO_ROOT/docker/docker-compose.yml"
 ENV_EXAMPLE="$REPO_ROOT/docker/.env.example"
 

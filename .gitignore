@@ -5,3 +5,8 @@ credentials/
 sessions/
 node_modules/
 .DS_Store
+
+# Local dev stack state: the gateway's config dir and workspace, bind-mounted
+# by docker/docker-compose.local.yml. Holds agent-written files and runtime
+# credentials — never commit it. Discard with ./local.sh reset.
+.local/
