@@ -162,6 +162,96 @@ Notes:
 - Set `GHCR_USERNAME` (in `.env`) to the repo owner (lowercase) so `docker-compose.yml` resolves to the images the workflow pushed.
 - New packages are private by default; make sure the VPS can pull them.
 
+## Running Locally
+
+Brings the shipped configuration up as a real gateway on your machine, so a
+change can be exercised before it reaches the VPS. One command:
+
+```bash
+./local.sh
+```
+
+`config/openclaw.json`, `docker/Dockerfile` and `docker/docker-compose.yml` are
+used exactly as committed; `docker/docker-compose.local.yml` supplies only the
+deltas a laptop needs (build instead of pull, host paths, a local image tag).
+Nothing in the local path can affect a deployment.
+
+| Command | What it does |
+|---|---|
+| `./local.sh` or `./local.sh up` | Preflight, copy config, build, start, follow logs |
+| `./local.sh down` | Stop and remove the containers; local state is kept |
+| `./local.sh logs` | Follow the logs of a running stack |
+| `./local.sh shell` | A shell inside the running gateway |
+| `./local.sh reset` | Discard all local state (asks for confirmation) |
+| `./local.sh validate` | Run `validate-config.sh` and `check-env-vars.sh` |
+
+### First run
+
+1. **Create a second Telegram bot** with @BotFather. This is not optional — see
+   below.
+2. `./local.sh` — with no `.env` present it creates one from
+   `docker/.env.example` and stops so you can fill it in. The file is gitignored.
+3. Fill in `.env`. Every variable `docker-compose.yml` requires must have a
+   value; `./local.sh` refuses to start otherwise and names what is missing.
+   Generate the gateway token with `openssl rand -hex 32`.
+4. `./local.sh` again. The first run builds the image, which takes a while
+   (chromium, the GitHub CLI and two global npm packages). Later runs reuse it.
+5. DM your **dev** bot and send `/start`.
+
+The control UI is at `http://localhost:18789`, published on loopback only.
+
+### Use a second bot, not the deployed one
+
+Telegram allows **one `getUpdates` consumer per bot token**. Pointing a local
+gateway at the deployed bot's token makes both contend for the long poll:
+messages split non-deterministically between them and the deployed bot drops
+traffic. Nothing can detect this for you — the deployed secrets do not exist on
+your machine — so `./local.sh` prints the bot id it is about to poll with before
+it starts. Check that line.
+
+Your `TELEGRAM_USER_ID` stays the same for both bots, so the shipped config
+needs no change to accept DMs to the dev bot.
+
+### What a local run actually costs
+
+- **OpenRouter spend is real.** Every conversation bills `OPENROUTER_API_KEY`.
+  The default model is the cheapest in the routing table, so ordinary testing is
+  inexpensive — but voice notes bill per second of audio on the transcription
+  slot rather than per token, and `/model sonnet` is roughly twenty times the
+  default's rate.
+- **Composio tool access is live.** `mcp.servers.composio` is wired with a real
+  URL and key, so the local agent can act for real on whatever that server has
+  connected — send the email, write the calendar event. Either accept that, or
+  point `COMPOSIO_MCP_URL` and `COMPOSIO_API_KEY` at a second Composio server
+  with a narrower set of connections.
+- **The local image is not deployable.** It is built for your machine's
+  architecture, while the VPS runs `linux/amd64`. `scripts/build-and-push.sh`
+  remains the only producer of the deployable image, and an
+  architecture-specific defect will not show up locally.
+
+### Local state
+
+Lives in `.local/` (gitignored):
+
+```
+.local/openclaw/     -> /home/node/.openclaw  (config dir, session state)
+.local/workspace/    -> the agent's workspace, its installed skills
+```
+
+Both are bind mounts, so you can read what the agent wrote with `ls` and `cat`.
+`config/*` is re-copied into `.local/openclaw/` on every `up` — the same
+overwrite behaviour `make push-config` has on the VPS, so a repo edit always
+wins. Everything else under the config dir survives a restart, which is why
+repeat starts do not reinstall the manifest's skills.
+
+`./local.sh reset` discards all of it.
+
+### Not covered locally
+
+`workspace-sync` stays behind its `sync` profile and is never started by
+`./local.sh`, so a local run cannot push a test workspace to a real remote. The
+infra repo's deploy path is likewise untested here.
+
 ## Working with Skills
 
 This repository includes a minimal set of generic skills in `config/skills-manifest.txt`. You can extend OpenClaw by adding ClawHub skills or creating custom skills.

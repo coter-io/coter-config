@@ -7,7 +7,7 @@ Defines the contract between the environment variables the shipped configuration
 ## Requirements
 
 ### Requirement: Every referenced variable is documented
-The system SHALL declare in `docker/.env.example` every environment variable referenced by `config/openclaw.json` or `docker/docker-compose.yml`, so the documented file is a complete description of what an operator must supply.
+The system SHALL declare in `docker/.env.example` every environment variable referenced by `config/openclaw.json` or by the deployment compose file `docker/docker-compose.yml`, so the documented file is a complete description of what an operator must supply. A compose file used only for local development is outside this contract.
 
 #### Scenario: Variable referenced by the config
 - **WHEN** `config/openclaw.json` references a variable as `${VAR}`
@@ -20,6 +20,10 @@ The system SHALL declare in `docker/.env.example` every environment variable ref
 #### Scenario: New variable introduced
 - **WHEN** a change introduces a reference to a variable that is not declared
 - **THEN** validation fails and names the undeclared variable
+
+#### Scenario: Variable referenced only by a local development compose file
+- **WHEN** a compose file that no deployment consumes interpolates a variable
+- **THEN** that variable is outside this contract and its absence from `docker/.env.example` is not a failure
 
 ### Requirement: Variable names match across files
 The system SHALL use one name per credential across `config/openclaw.json`, `docker/docker-compose.yml`, and `docker/.env.example`, so a value an operator supplies under the documented name reaches the container.
@@ -63,4 +67,19 @@ The system SHALL verify this contract with a repository script rather than by in
 
 #### Scenario: Contract satisfied
 - **WHEN** every referenced variable is declared under a matching name
+- **THEN** the check passes
+
+### Requirement: A filled-in environment file is verified against the contract
+The system SHALL provide a check that compares the variables set in an operator's or developer's environment file against the names declared in `docker/.env.example`, so a value supplied under a name nothing consumes is reported rather than silently reaching nothing.
+
+#### Scenario: Required variable absent from the environment file
+- **WHEN** the environment file omits a variable that is interpolated without a default
+- **THEN** the check fails and names that variable
+
+#### Scenario: Value set under an undeclared name
+- **WHEN** the environment file sets a name that `docker/.env.example` does not declare
+- **THEN** the check reports that name as consumed by nothing
+
+#### Scenario: Environment file satisfies the contract
+- **WHEN** every variable declared as required is set and no undeclared name is present
 - **THEN** the check passes

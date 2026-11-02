@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # GHCR_USERNAME must be set
 if [[ -z "${GHCR_USERNAME:-}" ]]; then
     echo "ERROR: GHCR_USERNAME environment variable is not set"
-    echo "Set it in docker/.env or your shell profile"
+    echo "Set it in .env or your shell profile"
     exit 1
 fi
 

@@ -77,12 +77,11 @@ git clone https://github.com/YOUR_USERNAME/openclaw-docker-config.git
 cd openclaw-docker-config
 
 # Set up environment
-cp docker/.env.example docker/.env
-vim docker/.env  # Add your configuration
+cp docker/.env.example .env
+vim .env  # Add your configuration
 
-# Test build
-cd docker
-docker compose build
+# Build and run the stack locally
+./local.sh
 
 # Test deployment (requires infra repo)
 # See README.md for full deployment instructions
