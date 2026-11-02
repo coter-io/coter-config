@@ -40,7 +40,144 @@ if grep -qE "$PATTERNS" "$CONFIG"; then
   exit 1
 fi
 
-# 3. Check the config against the schema of the pinned OpenClaw version.
+# Mirrors the gateway's IDENTITY.md parser so this gate reads the file the same
+# way the runtime does: strip the leading "- ", split at the first colon, drop
+# * _ ` from the label, and trim * _ ` and surrounding space from the value.
+# A label written "- **Name:** Coter" therefore yields exactly "Coter", and a
+# value the runtime would ignore is reported as absent here too.
+identity_md_field() {
+  awk -v want="$1" '
+    { line = $0
+      sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+      idx = index(line, ":")
+      if (idx == 0) next
+      label = substr(line, 1, idx - 1)
+      value = substr(line, idx + 1)
+      gsub(/[*_`]/, "", label)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", label)
+      if (tolower(label) != want) next
+      gsub(/^[*_`[:space:]]+|[*_`[:space:]]+$/, "", value)
+      if (value == "") next
+      print value
+      exit
+    }' "$2"
+}
+
+# 3. Check that the gateway is told not to create workspace bootstrap files.
+# Without this key the gateway seeds BOOTSTRAP.md into a fresh workspace and the
+# agent's first turn becomes a setup ritual: it asks the user what to call it,
+# generates avatar options, and offers plugin installs. The whole point of the
+# predefined workspace files is that no user ever sees that.
+SKIP_BOOTSTRAP="$(jq -r '.agents.defaults.skipBootstrap' "$CONFIG")"
+if [[ "$SKIP_BOOTSTRAP" != "true" ]]; then
+  echo "ERROR: agents.defaults.skipBootstrap is not true in $CONFIG (read: $SKIP_BOOTSTRAP)"
+  echo "The onboarding ritual would return: the gateway would seed BOOTSTRAP.md"
+  echo "into a fresh workspace and the agent's first turn would ask the user for a"
+  echo "name, generate avatar options, and offer plugin installs."
+  echo 'Set "skipBootstrap": true under agents.defaults.'
+  exit 1
+fi
+
+# 4. Check that every predefined workspace file reaches the image.
+# With bootstrap creation disabled the gateway authors nothing, so a file missing
+# here is a file the agent simply does not get — no conventions, no personality,
+# no identity. docker/Dockerfile copies this directory into the image and
+# docker/entrypoint.sh seeds it into the workspace without clobbering.
+#
+# This array, in scripts/validate-config.sh, is the single required set. A
+# predefined workspace file that is not listed here is not checked by any gate,
+# so adding a file to workspace-templates/ without adding it to this array is
+# precisely the omission that would go unreported. Keep the two in step.
+REQUIRED_WORKSPACE_FILES=(
+  "workspace-templates/AGENTS.md"
+  "workspace-templates/SOUL.md"
+  "workspace-templates/IDENTITY.md"
+  "workspace-templates/USER.md"
+  "workspace-templates/avatars/avatar.png"
+)
+MISSING_WORKSPACE_FILES=()
+for rel in "${REQUIRED_WORKSPACE_FILES[@]}"; do
+  if [[ ! -s "$REPO_ROOT/$rel" ]]; then
+    MISSING_WORKSPACE_FILES+=("$rel")
+  fi
+done
+if [[ "${#MISSING_WORKSPACE_FILES[@]}" -gt 0 ]]; then
+  echo "ERROR: predefined workspace files are missing or empty:"
+  for rel in "${MISSING_WORKSPACE_FILES[@]}"; do
+    echo "  - $rel"
+  done
+  echo "The gateway creates no replacement for these, so the agent would start"
+  echo "without them. Restore each file listed above."
+  exit 1
+fi
+
+# 5. Check that the two places identity is authored agree.
+# Displayed identity comes from the config; the agent reads IDENTITY.md to know
+# who it is. Nothing syncs them once bootstrap creation is disabled, so a
+# disagreement is silent: channels show one identity and the agent believes
+# another. The vibe line is held in three places and must match in all of them.
+IDENTITY_MD="$REPO_ROOT/workspace-templates/IDENTITY.md"
+SOUL_MD="$REPO_ROOT/workspace-templates/SOUL.md"
+IDENTITY_MISMATCH=0
+for field in name emoji theme avatar; do
+  CONFIG_VALUE="$(jq -r --arg f "$field" '.agents.entries.main.identity[$f] // ""' "$CONFIG")"
+  FILE_VALUE="$(identity_md_field "$field" "$IDENTITY_MD")"
+  if [[ "$CONFIG_VALUE" != "$FILE_VALUE" ]]; then
+    echo "ERROR: identity field '$field' disagrees between the two authoring points"
+    echo "  config/openclaw.json              : ${CONFIG_VALUE:-<unset>}"
+    echo "  workspace-templates/IDENTITY.md   : ${FILE_VALUE:-<unset>}"
+    IDENTITY_MISMATCH=1
+  fi
+done
+
+# Theme wins over Creature and Vibe when the runtime reads IDENTITY.md, so a
+# Vibe line that drifts from Theme would leave SOUL.md describing a personality
+# the runtime does not use.
+IDENTITY_VIBE="$(identity_md_field vibe "$IDENTITY_MD")"
+IDENTITY_THEME="$(identity_md_field theme "$IDENTITY_MD")"
+if [[ "$IDENTITY_VIBE" != "$IDENTITY_THEME" ]]; then
+  echo "ERROR: Vibe and Theme differ in workspace-templates/IDENTITY.md"
+  echo "  Vibe : ${IDENTITY_VIBE:-<unset>}"
+  echo "  Theme: ${IDENTITY_THEME:-<unset>}"
+  IDENTITY_MISMATCH=1
+fi
+
+SOUL_VIBE="$(awk '/^## Vibe[[:space:]]*$/ { found = 1; next }
+                  found && NF { print; exit }' "$SOUL_MD")"
+if [[ "$SOUL_VIBE" != "$IDENTITY_THEME" ]]; then
+  echo "ERROR: the vibe line in workspace-templates/SOUL.md does not match IDENTITY.md"
+  echo "  SOUL.md ## Vibe : ${SOUL_VIBE:-<unset>}"
+  echo "  IDENTITY.md     : ${IDENTITY_THEME:-<unset>}"
+  IDENTITY_MISMATCH=1
+fi
+
+# The avatar is a workspace-relative path, so it must name a file that actually
+# ships. A renamed avatar would otherwise pass the required-set check above.
+CONFIG_AVATAR="$(jq -r '.agents.entries.main.identity.avatar // ""' "$CONFIG")"
+if [[ -n "$CONFIG_AVATAR" ]]; then
+  case "$CONFIG_AVATAR" in
+    /* | '~'* | *..*)
+      echo "ERROR: identity avatar must be a workspace-relative path: $CONFIG_AVATAR"
+      IDENTITY_MISMATCH=1
+      ;;
+    *)
+      if [[ ! -s "$REPO_ROOT/workspace-templates/$CONFIG_AVATAR" ]]; then
+        echo "ERROR: identity avatar names a file that does not ship:"
+        echo "  workspace-templates/$CONFIG_AVATAR"
+        IDENTITY_MISMATCH=1
+      fi
+      ;;
+  esac
+fi
+
+if [[ "$IDENTITY_MISMATCH" -ne 0 ]]; then
+  echo "Identity is authored in config/openclaw.json and"
+  echo "workspace-templates/IDENTITY.md, and the vibe line is repeated in"
+  echo "workspace-templates/SOUL.md. Change them together."
+  exit 1
+fi
+
+# 6. Check the config against the schema of the pinned OpenClaw version.
 # The version and node base both come from docker/Dockerfile, so this check and
 # the gateway image can never disagree about which schema applies.
 # OPENCLAW_VERSION_OVERRIDE exists so check-forward-compat.sh can run this exact
@@ -113,7 +250,7 @@ if [[ "$SCHEMA_STATUS" -ne 0 ]]; then
   exit 1
 fi
 
-# 4. Check for defects the schema accepts but the runtime considers unhealthy.
+# 7. Check for defects the schema accepts but the runtime considers unhealthy.
 # `config validate` above reports hard errors and renamed keys, but accepts a
 # config that is structurally fine and still wrong — a hardcoded credential in a
 # secret-bearing field validates as a string and is reported only here, as

@@ -1,0 +1,30 @@
+# Upstream starter-template baseline for the predefined workspace files.
+#
+# Each line is the first 32 characters of the sha256 of one OpenClaw starter
+# template, taken from the version recorded below, after stripping its YAML
+# front matter — which is how the gateway itself loads a template. The files in
+# workspace-templates/ were derived from exactly these bodies and then
+# customized, so they cannot be compared to upstream directly: they are meant
+# to differ.
+#
+# scripts/check-forward-compat.sh compares a newer release's templates against
+# these digests, so the only thing it reports is upstream changing out from
+# under the predefined copies. Refresh this file in the same commit that raises
+# ARG OPENCLAW_VERSION, after reviewing what changed.
+#
+# The digests are truncated to 32 hex characters on purpose. A full 64-character
+# digest is an unbroken run of [A-Za-z0-9], which scripts/check-secrets.sh
+# rightly treats as possible base64 and reports as a leaked token. 128 bits is
+# far more than enough to notice a template edit, so truncating here keeps that
+# scanner strict rather than carving out an exception for this file.
+#
+# This lives in scripts/ rather than workspace-templates/ because
+# docker/entrypoint.sh seeds that directory with "cp -rn <dir>/." which copies
+# hidden files too, so anything placed there lands in every agent workspace.
+#
+# derived-from: openclaw@2026.10.7
+
+490fc2b32865dd310a3af1225a409ac5  AGENTS.md
+f1ca0312afae15dee389671c566cb25c  SOUL.md
+d1b9cea71ba4214fdd266b2b2a28adca  IDENTITY.md
+46e0d8c937df7b104de97a23c5853729  USER.md

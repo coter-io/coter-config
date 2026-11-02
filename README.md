@@ -118,6 +118,49 @@ openclaw automations show <job-id>
 
 Add `--fallbacks <list>` to set per-job fallbacks, or `--clear-model` to revert to the agent default.
 
+## Agent Identity and Workspace
+
+The agent arrives fully configured. There is no onboarding: the first message you
+send is answered as ordinary work, with no questions about what to call it, no
+personality interview, no generated avatar options, and no plugin offer.
+
+That is deliberate. `config/openclaw.json` sets
+`agents.defaults.skipBootstrap: true`, which stops OpenClaw from creating any
+workspace bootstrap file — including the `BOOTSTRAP.md` whose contents drive the
+first-run ritual. Everything the agent starts with is predefined here instead:
+
+| File | What it holds |
+|---|---|
+| `workspace-templates/AGENTS.md` | Workspace conventions, memory rules, red lines |
+| `workspace-templates/SOUL.md` | Personality and boundaries |
+| `workspace-templates/IDENTITY.md` | Name, creature, vibe, emoji, avatar path |
+| `workspace-templates/USER.md` | Durable user preferences, as active directives |
+| `workspace-templates/avatars/avatar.png` | The avatar, committed as a static image |
+
+`docker/Dockerfile` copies that directory into the image, and
+`docker/entrypoint.sh` seeds it into the agent's workspace on every start without
+overwriting anything already there. So the files survive a restart along with
+whatever the agent has since written, and `./local.sh reset` brings the
+repository's versions back.
+
+### Changing the agent's identity
+
+Identity is authored in exactly two places, and they must agree:
+
+- `agents.entries.main.identity` in `config/openclaw.json` — what channels and the
+  control UI display
+- `workspace-templates/IDENTITY.md` — what the agent reads to know who it is
+
+Change both together. `bash scripts/validate-config.sh` fails when they disagree,
+and the vibe line is repeated in `workspace-templates/SOUL.md`, which the same
+check keeps in step.
+
+**Asking the agent to rename itself at runtime does not stick.** The repository's
+`config/openclaw.json` is copied over the gateway's copy on every bring-up — by
+`./local.sh` locally and by the infra repo's `make push-config` on the VPS — so a
+runtime identity change is discarded on the next start. The repository is the
+authoring point; edit it there and redeploy.
+
 ## Config Change Workflow
 
 There are two types of changes, and they have different workflows:
@@ -196,7 +239,9 @@ Nothing in the local path can affect a deployment.
    Generate the gateway token with `openssl rand -hex 32`.
 4. `./local.sh` again. The first run builds the image, which takes a while
    (chromium, the GitHub CLI and two global npm packages). Later runs reuse it.
-5. DM your **dev** bot and send `/start`.
+5. DM your **dev** bot and send `/start`. It replies as a ready agent — no
+   onboarding questions, because its identity and workspace files are predefined
+   (see [Agent Identity and Workspace](#agent-identity-and-workspace)).
 
 The control UI is at `http://localhost:18789`, published on loopback only.
 
@@ -334,16 +379,26 @@ For detailed skill development documentation, see the [OpenClaw Skill Developmen
 
 ### Included Skills
 
-The default configuration includes these generic ClawHub skills:
+**No ClawHub skills are installed by default.** `config/skills-manifest.txt`
+ships empty, so a fresh container installs nothing and starts faster. The agent
+still has its built-in tools; skills are additive.
 
-| Skill | Description | Use Case |
-|-------|-------------|----------|
-| `yt` | YouTube transcript fetching and video search | "Get transcript for youtube.com/watch?v=..." |
-| `agent-browser` | Headless browser for JavaScript-heavy/paywalled pages | Access dynamic content |
-| `system-monitor` | CPU/RAM/GPU status check | "What's my server's CPU usage?" |
-| `conventional-commits` | Format commit messages per convention | Standardized commit messages |
+To add one, put its **publisher-qualified** id in the manifest, then rebuild and
+deploy:
 
-These are intentionally minimal — add your own skills based on your workflows.
+```
+@owner/slug
+```
+
+The publisher prefix matters. Several publishers often share a slug, and
+`clawhub` refuses to guess between them — a bare slug fails to install, and
+because `docker/entrypoint.sh` only skips a skill whose directory already
+exists, the failed install is retried on every single start.
+
+Skills that pair well with this setup, if you want them: a headless browser for
+JavaScript-heavy pages, YouTube transcript fetching, host resource monitoring,
+and commit-message formatting. Search [ClawHub](https://clawhub.ai/) for the
+current publishers rather than copying an id from here.
 
 ## Workspace Git Sync (Optional)
 
