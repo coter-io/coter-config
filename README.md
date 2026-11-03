@@ -131,10 +131,10 @@ first-run ritual. Everything the agent starts with is predefined here instead:
 
 | File | What it holds |
 |---|---|
-| `workspace-templates/AGENTS.md` | Workspace conventions, memory rules, red lines |
+| `workspace-templates/AGENTS.md` | The agent's role, how it routes work between native tools and the external tool surface, what it may do without asking, memory rules, red lines |
 | `workspace-templates/SOUL.md` | Personality and boundaries |
 | `workspace-templates/IDENTITY.md` | Name, creature, vibe, emoji, avatar path |
-| `workspace-templates/USER.md` | Durable user preferences, as active directives |
+| `workspace-templates/USER.md` | Durable user preferences and business facts, as active directives |
 | `workspace-templates/avatars/avatar.png` | The avatar, committed as a static image |
 
 `docker/Dockerfile` copies that directory into the image, and
@@ -143,7 +143,55 @@ overwriting anything already there. So the files survive a restart along with
 whatever the agent has since written, and `./local.sh reset` brings the
 repository's versions back.
 
+### Changing a workspace template
+
+Two things about this directory catch people out.
+
+**It ships in the image, not in the config push.** `docker/Dockerfile` has
+`COPY workspace-templates/ /opt/workspace-templates/`, so a template edit follows
+the [Docker image workflow](#changing-the-docker-image-dockerfile-openclaw-version)
+— rebuild and `make deploy` — not `make push-config`. Pushing config alone leaves
+the old templates in the image.
+
+**Seeding will not overwrite a file that already exists.** `docker/entrypoint.sh`
+seeds with `cp -rn`, which is what protects whatever the agent has written. The
+cost is that a deployment with an existing workspace keeps its old copies:
+
+```
+  config/openclaw.json   --make push-config-->  replaced       new identity
+  workspace-templates/   --cp -rn----------->   SKIPPED        old identity
+```
+
+Deploying is therefore not enough. To land a changed template on a deployment
+that already has a workspace, remove or move aside that file in the agent's
+workspace and restart so the new copy seeds. Keep anything the agent itself
+wrote — `USER.md` in particular accumulates real directives, so merge rather
+than replace it.
+
+Locally, `./local.sh reset` does all of this for you.
+
+**No gate catches a stale copy.** `bash scripts/validate-config.sh` compares the
+repository's own authoring points — `config/openclaw.json` against
+`workspace-templates/IDENTITY.md` and `SOUL.md`. It never inspects a deployed
+workspace, so a running agent reading an old `IDENTITY.md` while channels display
+the new one passes every check in this repository. Verify it on the deployment
+after a template change.
+
 ### Changing the agent's identity
+
+What ships:
+
+| Field | Value |
+|---|---|
+| Name | Coter |
+| Creature | Business assistant |
+| Vibe / Theme | Precise and business-like, with dry efficiency |
+| Emoji | ⚫ |
+| Avatar | `avatars/avatar.png` |
+
+The emoji is deliberately plain: the agent works alongside colleagues in business
+tools, where a neutral marker reads better than a decorative one. The avatar is a
+committed image and is never generated.
 
 Identity is authored in exactly two places, and they must agree:
 

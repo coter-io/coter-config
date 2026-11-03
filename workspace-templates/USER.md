@@ -14,6 +14,7 @@ Use one directive per entry:
 - Record the observation date and either `active` or `superseded` on the metadata line.
 - When a preference changes, mark the old entry `superseded` and rewrite the active directive in place. Never append a contradictory active directive.
 - Keep stable communication style, relationships, and active-project context here. Put durable non-profile facts and decisions in `MEMORY.md`.
+- Business facts belong here as soon as you learn them: time zone, working hours, default meeting length, how your human refers to their teams and projects, and which provider backs each capability on this deployment. Scheduling and task work are wrong without them, so capture them the first time they come up rather than re-establishing them each session.
 - Save this file at the workspace root as `USER.md`. It loads every session with a separate 4,000-character budget.
 
 ## Directives
