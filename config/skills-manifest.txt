@@ -3,5 +3,7 @@
 # To add a skill: add its ClawHub name here, rebuild and deploy.
 # To remove a skill: remove the line, then manually remove from workspace/skills/ on VPS.
 
-# Agent Browser — headless browser for JS-heavy/paywalled pages
-agent-browser
+# No skills are installed by default. Add one line per ClawHub skill below,
+# using its publisher-qualified id (for example @owner/slug) — a bare slug that
+# several publishers use is ambiguous, and clawhub refuses to guess, so the
+# install fails and is retried on every container start.

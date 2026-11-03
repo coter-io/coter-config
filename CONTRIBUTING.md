@@ -102,6 +102,55 @@ When adding or modifying configuration:
 - Keep skills minimal and generic
 - Avoid hardcoding paths, usernames, or domains
 
+## Predefined Agent Workspace
+
+The agent's workspace files are predefined in this repository rather than created
+by the gateway on first run. `config/openclaw.json` sets
+`agents.defaults.skipBootstrap: true`, so OpenClaw authors nothing: everything the
+agent starts with comes from `workspace-templates/`, which `docker/Dockerfile`
+copies into the image and `docker/entrypoint.sh` seeds into the workspace without
+overwriting what is already there.
+
+That means a first start asks the user nothing and generates no avatar. It also
+means a file missing from `workspace-templates/` is a file the agent simply does
+not get, so `bash scripts/validate-config.sh` fails when any predefined file is
+absent, when `skipBootstrap` is not `true`, or when the identity in
+`config/openclaw.json` disagrees with `workspace-templates/IDENTITY.md`.
+
+Anything added to `workspace-templates/` must also be added to the
+`REQUIRED_WORKSPACE_FILES` array in `scripts/validate-config.sh`; nothing else
+checks it. Note that the entrypoint seeds the directory with `cp -rn <dir>/.`,
+which copies hidden files too — anything placed there, including a dotfile, lands
+in every agent workspace.
+
+### Raising the pinned OpenClaw version
+
+`AGENTS.md`, `SOUL.md`, `IDENTITY.md`, and `USER.md` were derived from the pinned
+release's starter templates and then customized. They no longer track upstream
+automatically, so improvements to those templates do not arrive on their own and
+have to be folded in by hand.
+
+`scripts/upstream-templates.sha256` records what those templates looked like when
+the files were derived. Before raising `ARG OPENCLAW_VERSION` in
+`docker/Dockerfile`, run:
+
+```bash
+bash scripts/check-forward-compat.sh
+```
+
+It reports any starter template that changed upstream since the baseline was
+recorded, and any workspace file the new release ships that this repository does
+not predefine. To check a specific release rather than the newest published one:
+
+```bash
+OPENCLAW_FORWARD_TARGET=2026.10.9 bash scripts/check-forward-compat.sh
+```
+
+When it reports drift, fold the upstream change into `workspace-templates/` by
+hand and refresh `scripts/upstream-templates.sha256` in the same commit as the
+version bump. The check is advisory and does not gate a pull request; it is a
+prompt to review, not a verdict.
+
 ## Skill Contributions
 
 When adding skills to the manifest:

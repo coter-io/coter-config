@@ -93,13 +93,16 @@
       "maxConcurrent": 2,
       "subagents": {
         "maxConcurrent": 4
-      }
+      },
+      "skipBootstrap": true
     },
     "entries": {
       "main": {
         "identity": {
           "name": "Coter",
-          "emoji": "🔘"
+          "emoji": "⚫",
+          "theme": "Precise and business-like, with dry efficiency",
+          "avatar": "avatars/avatar.png"
         }
       }
     }
