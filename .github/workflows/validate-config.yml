@@ -45,9 +45,11 @@ jobs:
 
       - name: Validate compose file
         run: |
-          # The gateway service declares `env_file: .env`, which is supplied by
-          # the operator and deliberately not committed. Compose refuses to read
-          # the file at all without it, so create an empty one — the values
+          # No service declares `env_file:` — the gateway is given only what its
+          # `environment:` block names — but compose still reads a .env for
+          # ${VAR} interpolation, resolved against the compose file's directory
+          # here since no --project-directory is passed. The operator's .env is
+          # deliberately not committed, so create an empty one; the values
           # interpolation needs come from `env:` below, not from this file.
           # Guarded so running this step locally never clobbers a real .env.
           [ -f docker/.env ] || : > docker/.env

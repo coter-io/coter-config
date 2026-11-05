@@ -40,6 +40,43 @@ COMPOSE_REFS="$(sed 's/#.*//' "$COMPOSE" \
 DECLARED="$(sed 's/#.*//' "$ENV_EXAMPLE" \
   | grep -oE '^[A-Za-z0-9_]+=' | tr -d '=' | sort -u || true)"
 
+# Keys of the gateway service's `environment:` block, and deliberately only that
+# block. Since docker-compose.yml carries no `env_file:` for that service, this
+# block is the *only* route a variable has into the container: a name appearing
+# elsewhere in the file — as a bind-mount source, say, the way
+# OPENCLAW_CONFIG_DIR does — must not count as passed through, so this cannot be
+# a grep over the whole file.
+#
+# Parsed as text rather than with `docker compose config` on purpose. This check
+# runs in the pre-commit hook and as the gate's first offline step, before the
+# compose file is validated, and `config` needs Docker plus a value for every
+# variable marked :? . The parse tracks indentation: a 2-space key opens a
+# service, a 4-space key under the gateway opens or closes its environment
+# block, and 6-space keys inside it are the names passed to the container.
+GATEWAY_ENV_KEYS="$(sed 's/#.*//' "$COMPOSE" | awk '
+  /^  [A-Za-z0-9_-]+:[[:space:]]*$/ {
+    service = $1; sub(/:$/, "", service); in_env = 0; next
+  }
+  service != "openclaw-gateway" { next }
+  /^    environment:[[:space:]]*$/ { in_env = 1; next }
+  /^    [A-Za-z0-9_-]+:/ { in_env = 0 }
+  in_env && /^      [A-Za-z0-9_]+:/ {
+    key = $1; sub(/:$/, "", key); print key
+  }
+' | sort -u || true)"
+
+# Fail closed. An empty result means the parse found no gateway environment
+# block — a renamed service, a reindented file — not that the block is empty.
+# Reporting every referenced variable as unpassed would be a true failure for
+# the wrong reason, so name the real one.
+if [[ -z "$GATEWAY_ENV_KEYS" ]]; then
+  echo "ERROR: could not read the openclaw-gateway service's environment: block in"
+  echo "docker/docker-compose.yml. This check compares that block against the"
+  echo "\${VAR} references in config/openclaw.json and will not pass without it."
+  echo "If the service was renamed or reindented, update the parse in $0."
+  exit 1
+fi
+
 # True when every _-delimited token of $1 also appears in $2. Used to tell a
 # misspelling apart from a genuinely new variable: BRAVE_API_KEY against
 # BRAVE_SEARCH_API_KEY is a subset and worth flagging, while TELEGRAM_USER_ID
@@ -105,6 +142,44 @@ if [[ "$MISSING" -eq 1 ]]; then
   echo "Declare each name listed above in docker/.env.example, together with the source"
   echo "an operator uses to obtain its value. CONTRIBUTING.md requires this, and an"
   echo "undocumented variable reaches the container empty."
+fi
+
+# Second comparison: every variable the gateway's own config references must be
+# passed into the gateway. Being documented in .env.example is not enough and
+# being interpolated somewhere in the compose file is not enough either — with
+# no `env_file:` on that service, a referenced variable the environment: block
+# does not name arrives in the container as an empty string, and the gateway
+# fails at runtime on a config value that looks correct in every file.
+#
+# Reported alongside the check above rather than after an early exit, so one run
+# surfaces both kinds of drift.
+UNPASSED=0
+
+while IFS= read -r var; do
+  [[ -z "$var" ]] && continue
+  grep -Fxq "$var" <<<"$GATEWAY_ENV_KEYS" && continue
+
+  echo "  - $var"
+  echo "      referenced by: config/openclaw.json"
+  echo "      must be named in: the openclaw-gateway service's environment: block"
+  echo "                        in docker/docker-compose.yml"
+  if grep -Fxq "$var" <<<"$COMPOSE_REFS"; then
+    echo "      note: the name appears elsewhere in docker/docker-compose.yml, but only"
+    echo "            the environment: block passes a value into the container"
+  fi
+  UNPASSED=1
+done <<< "$CONFIG_REFS"
+
+if [[ "$UNPASSED" -eq 1 ]]; then
+  echo ""
+  echo "ERROR: config/openclaw.json references variables the gateway is not given"
+  echo "Add each name listed above to the openclaw-gateway service's environment: block"
+  echo "in docker/docker-compose.yml. That service carries no env_file:, so the block is"
+  echo "the only route a variable has into the container; an unlisted one reaches the"
+  echo "gateway empty. CONTRIBUTING.md requires this."
+fi
+
+if [[ "$MISSING" -eq 1 || "$UNPASSED" -eq 1 ]]; then
   exit 1
 fi
 

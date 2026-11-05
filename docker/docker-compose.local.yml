@@ -12,8 +12,9 @@
 # IMPORTANT: every relative path below resolves against the *project directory*,
 # not against this file's directory. local.sh passes --project-directory . (the
 # repo root), so `.` here means the repo root and `..` would mean the directory
-# above the repo. This applies to build.context, bind-mount sources and
-# env_file alike. Verified against the renderer, not assumed.
+# above the repo. This applies to build.context and bind-mount sources — the
+# only relative paths this file has — and would apply to an env_file key too, if
+# either compose file still had one. Verified against the renderer, not assumed.
 #
 # Variables used only here (OPENCLAW_LOCAL_STATE_DIR) are outside the
 # deployment-env-contract and are not declared in docker/.env.example. See the
@@ -34,14 +35,20 @@ services:
     # merging, so that variable must still have a value. local.sh supplies a
     # placeholder when .env does not set one.
     image: coter-openclaw-gateway:local
-    # No env_file override is needed, and adding one is a trap. Compose resolves
-    # a relative env_file against the *project directory*, not the compose
-    # file's directory, and local.sh passes --project-directory . (the repo
-    # root) — so the inherited `env_file: .env` already resolves to the
-    # project-root .env. An `../.env` here resolves one level above the repo.
-    # This is separate from --env-file on the command line, which only controls
-    # which file ${VAR} interpolation reads; both must point at the same file,
-    # and local.sh makes them.
+    # No env_file override is needed, and adding one is a trap. docker-compose.yml
+    # deliberately carries no `env_file:` on this service — it injected every key
+    # of the root .env into the container, including the two host paths below —
+    # so there is nothing to override, and adding one here would reintroduce
+    # exactly the blanket injection that file removed. The gateway receives only
+    # what the inherited `environment:` block names, plus the deltas below.
+    #
+    # If one is ever added anyway, note that compose resolves a relative env_file
+    # against the *project directory*, not the compose file's directory, and
+    # local.sh passes --project-directory . (the repo root): `.env` here would
+    # mean the project-root .env, and `../.env` one level above the repo. That is
+    # separate from --env-file on the command line, which only controls which
+    # file ${VAR} interpolation reads — interpolation still reads the root .env,
+    # which is how the variables in the mount sources below get their values.
     # The inherited defaults are VPS paths (/home/openclaw/...). Docker Desktop
     # on macOS shares /Users, /Volumes, /private and /tmp only, so those cannot
     # be bind-mounted from a developer machine. Both mounts stay nested exactly
@@ -54,18 +61,21 @@ services:
       # published port is already loopback-only, so this changes nothing about
       # reachability. Kept explicit so a local run is obviously local.
       NODE_ENV: development
-      # OPENCLAW_CONFIG_DIR and OPENCLAW_WORKSPACE_DIR name the *host* bind-mount
-      # sources in docker-compose.yml, and docker/.env.example declares both with
-      # VPS values. Because docker-compose.yml also carries `env_file: .env`,
-      # every key of the root .env is injected into the container — so those two
-      # host paths arrive in the container's own environment, where the gateway
-      # honours them as its writable state directory. /home is root-owned and the
-      # process is uid 1000 (node), so every state write failed with
-      # "EACCES: permission denied, mkdir '/home/openclaw'" and every inbound
-      # message dead-lettered without a reply. Measured, not assumed.
+      # OPENCLAW_CONFIG_DIR and OPENCLAW_WORKSPACE_DIR are deliberately NOT
+      # pinned again here. They were, while docker-compose.yml still carried
+      # `env_file: .env`: that injected every key of the root .env into the
+      # container, so the two host paths .env declares for the bind-mount sources
+      # arrived in the container's own environment, where the gateway honoured
+      # them as its writable state directory. /home is root-owned and the process
+      # is uid 1000 (node), so every state write failed with "EACCES: permission
+      # denied, mkdir '/home/openclaw'" and every inbound message dead-lettered
+      # without a reply. Measured, not assumed.
       #
-      # An `environment:` entry wins over `env_file`, so pinning the in-container
-      # targets here neutralises whatever the root .env sets. These must stay
-      # equal to the mount targets declared above.
-      OPENCLAW_CONFIG_DIR: /home/node/.openclaw
-      OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace
+      # docker-compose.yml now carries no env_file: and pins both variables to
+      # the in-container mount targets itself. This file overrides only the mount
+      # *sources* (above) — the targets are inherited unchanged, so the shipped
+      # pins are already the right values for a local run. Re-pinning them here
+      # would make the local stack stop exercising the shipped fix, which is the
+      # same gap that left this bug live in production after it was fixed for
+      # local runs only: the local stack must fail if the shipped pins are ever
+      # removed, not paper over it. Delta-only, per this file's header.

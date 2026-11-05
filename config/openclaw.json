@@ -140,7 +140,7 @@
 
   "mcp": {
     "servers": {
-      "composio": {
+      "coter": {
         "transport": "streamable-http",
         "url": "${COMPOSIO_MCP_URL}",
         "headers": {

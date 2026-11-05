@@ -99,6 +99,20 @@ When adding or modifying configuration:
   enforced by `bash scripts/check-env-vars.sh`, which runs in the pull request gate —
   a variable documented under one spelling and injected under another reaches the
   container empty
+- **Name every variable the gateway needs in the deployment compose file.** The
+  `openclaw-gateway` service in `docker/docker-compose.yml` carries no `env_file:`,
+  so the operator's `.env` is not copied into the container: a variable reaches the
+  gateway only when that service's `environment:` block names it. Adding a `${VAR}`
+  reference to `config/openclaw.json` therefore means adding that variable to the
+  `environment:` block in the same change, or the gateway reads it empty. This is
+  enforced by `bash scripts/check-env-vars.sh`, which runs in the pull request gate;
+  the check reads that block specifically, so naming the variable elsewhere in the
+  compose file — as a bind-mount source, for instance — does not satisfy it
+- **A value that describes the host stays on the host.** `OPENCLAW_CONFIG_DIR` and
+  `OPENCLAW_WORKSPACE_DIR` are read by compose as bind-mount *sources* and are not
+  passed into the container; the gateway's directories are pinned to the mount
+  targets in the `environment:` block instead. Document any such variable in
+  `docker/.env.example` as host-side, and do not pass it through
 - Keep skills minimal and generic
 - Avoid hardcoding paths, usernames, or domains
 
