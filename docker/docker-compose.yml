@@ -1,7 +1,17 @@
 services:
   openclaw-gateway:
     image: ghcr.io/${GHCR_USERNAME:?required, your GHCR namespace in lowercase}/openclaw-docker-config/openclaw-gateway:latest
-    env_file: .env
+    # Deliberately no `env_file:`. It copied every key of the operator's .env
+    # into the container, including OPENCLAW_CONFIG_DIR and OPENCLAW_WORKSPACE_DIR
+    # — which name the *host* side of the bind mounts below and hold VPS paths.
+    # The gateway honoured them as its own writable directories, so every state
+    # write resolved to /home/openclaw/... inside the container, where /home is
+    # root-owned and the process is uid 1000: "EACCES: permission denied, mkdir
+    # '/home/openclaw'", and every inbound message dead-lettered without a reply.
+    # The `environment:` block below names everything the container needs, and
+    # the two OPENCLAW_*_DIR pins there state the in-container targets outright.
+    # ${VAR} interpolation is a separate mechanism that still reads .env, so the
+    # image reference and the bind-mount sources are unaffected by this absence.
     restart: unless-stopped
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY-}
@@ -12,6 +22,16 @@ services:
       # Marked :? so an unset value stops the stack with a named error. Plain
       # ${VAR} substitutes a blank string and boots half-broken instead.
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?required, generate with openssl rand -hex 32}
+      # Pins, not pass-throughs: hardcoded in-container paths, never ${VAR}.
+      # OPENCLAW_CONFIG_DIR and OPENCLAW_WORKSPACE_DIR name the *host* bind-mount
+      # sources under `volumes:` below, where they hold VPS paths. The gateway
+      # reads the same two names as its own writable directories, so these must
+      # stay equal to the `volumes:` targets declared in this service — change a
+      # target, change these. Redundant now that `env_file:` is gone (see the
+      # comment above `restart:`) and kept deliberately: the removal and these
+      # pins are two halves of one fix, so do not delete either half alone.
+      OPENCLAW_CONFIG_DIR: /home/node/.openclaw
+      OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?required for all models, audio transcription included, set it in .env}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?required, create a bot with BotFather}
       TELEGRAM_USER_ID: ${TELEGRAM_USER_ID:?required for the DM allowlist, get it from userinfobot}

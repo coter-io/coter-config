@@ -38,9 +38,13 @@ SERVICE="openclaw-gateway"
 COMPOSE_FILES=(-f "$REPO_ROOT/docker/docker-compose.yml" -f "$REPO_ROOT/docker/docker-compose.local.yml")
 
 # --project-directory is not cosmetic: compose resolves relative paths in both
-# compose files against it, including the inherited `env_file: .env` and the
-# local file's build context and bind-mount sources. --env-file covers a
-# different mechanism (${VAR} interpolation) and must name the same file.
+# compose files against it, including the local file's build context and both
+# files' bind-mount sources. --env-file covers a different mechanism (${VAR}
+# interpolation) and must name the same file.
+#
+# Neither compose file carries `env_file:` any more — the gateway receives only
+# what its `environment:` block names, so the root .env reaches the container
+# through no route at all. It is still read here, for interpolation only.
 compose() {
   docker compose \
     --project-name "$PROJECT_NAME" \

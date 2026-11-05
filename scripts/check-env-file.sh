@@ -90,16 +90,29 @@ while IFS= read -r var; do
   MISSING=1
 done <<< "$REQUIRED"
 
-# A name set here but documented nowhere reaches no container. Reported rather
-# than fatal: .env legitimately carries values consumed outside compose and the
-# config, exactly as .env.example documents some (GHCR_USERNAME is read by
-# compose's image reference, not by a container).
+# A name set here but documented nowhere reaches no container — true only
+# because the gateway service in docker/docker-compose.yml carries no
+# `env_file:`, so a variable enters the container solely by being named in that
+# service's environment: block. While `env_file: .env` was present the claim was
+# false and this warning was actively misleading: it is how
+# OPENCLAW_GATEWAY_BIND=0.0.0.0 and OPENCLAW_GATEWAY_PORT reached the production
+# gateway while being declared in neither the compose file nor .env.example, and
+# how two host paths reached it and broke every state write. Do not reintroduce
+# `env_file:` without downgrading what this branch asserts.
+#
+# Reported rather than fatal: .env legitimately carries values consumed outside
+# the container, exactly as .env.example documents some (GHCR_USERNAME is read
+# by compose's image reference, and OPENCLAW_CONFIG_DIR and
+# OPENCLAW_WORKSPACE_DIR are read as bind-mount sources on the host).
 while IFS= read -r var; do
   [[ -z "$var" ]] && continue
   if ! grep -Fxq "$var" <<<"$DECLARED"; then
     echo "  ! $var is set but not declared in docker/.env.example"
-    echo "      Nothing reads this name. Check it against the declared spelling —"
-    echo "      a near-miss (BRAVE_SEARCH_API_KEY vs BRAVE_API_KEY) silently reaches nothing."
+    echo "      Nothing in this repository reads this name: the gateway service carries no"
+    echo "      env_file:, so it receives only what its environment: block names, and this"
+    echo "      name is in neither that block nor the documented contract. Check it against"
+    echo "      the declared spelling — a near-miss (BRAVE_SEARCH_API_KEY vs BRAVE_API_KEY)"
+    echo "      silently reaches nothing. Harmless if something outside compose reads it."
     WARNED=1
   fi
 done <<< "$PRESENT"
